@@ -2,29 +2,18 @@ package main
 
 import (
 	"net/http"
-	"io/ioutil"
 	"os"
+	"io/ioutil"
 	"github.com/buger/jsonparser"
-	"log"
 )
 
-
 func main() {
-	channels := getChannels(100)
-	log.Println("Total channels:", len(channels))
+	channels := getChannels(1)
+	status_chan := make(chan StatusMsg)
 
-	var readers []reader
-	for  i := 0; i < len(channels); i = i + 20 {
-		channelBatch := channels[i:i+20]
-		readers = append(readers, NewReader(channelBatch, i/20))
-	}
-
-	for _, reader := range readers {
-		go Read(reader)
-	}
-
-	for {
-	}
+	load_balancer := NewLoadBalancer(channels, status_chan)
+	go Run(load_balancer)
+	for{}
 }
 
 func getChannels(n int) ([]string){
@@ -49,11 +38,4 @@ func getChannels(n int) ([]string){
 	}
 
 	return channels
-}
-
-func min(a, b int) int {
-	if a <= b {
-		return a
-	}
-	return b
 }
