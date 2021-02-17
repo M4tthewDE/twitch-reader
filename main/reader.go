@@ -88,7 +88,7 @@ func Read(r reader) {
 			}
 			r.status_chan <- StatusMsg {r.id, GetLoad(r), r.channels, nil}
 
-			if GetLoad(r) > 200 {
+			if GetLoad(r) > 150 {
 				for _, channel := range downscale(r) {
 					fmt.Fprintf(r.conn, "PART " + channel + "\n")
 				}
