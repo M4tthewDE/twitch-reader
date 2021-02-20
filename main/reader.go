@@ -11,10 +11,8 @@ import (
 )
 
 type StatusMsg struct {
-	id int
-	total_load int
-	channels map[string]int
-	parted_channels []string
+	r reader
+	parted_channels map[string]int
 }
 
 type reader struct {
@@ -23,13 +21,14 @@ type reader struct {
 	load []int
 	conn net.Conn
 	status_chan chan StatusMsg
+	channel_chan chan string
 }
 
-func NewReader(twitch_channels []string, id int, status_chan chan StatusMsg) reader {
+func NewReader(twitch_channels []string, id int, status_chan chan StatusMsg, channel_chan chan string) reader {
 	conn, err := net.Dial("tcp", "irc.chat.twitch.tv:6667")
 	if err != nil {
 		log.Println("[ ", id, " ]", " Error Connecting!", err)
-		NewReader(twitch_channels, id, status_chan)
+		NewReader(twitch_channels, id, status_chan, channel_chan)
 	}
 
 	fmt.Fprintf(conn, "PASS oauth: " + "\n")
@@ -43,7 +42,7 @@ func NewReader(twitch_channels []string, id int, status_chan chan StatusMsg) rea
 		channels[channel] = 0
 	}
 	load := []int{0,0,0,0,0}
-	r := reader {id, channels, load, conn, status_chan}
+	r := reader {id, channels, load, conn, status_chan, channel_chan}
 	return r
 }
 
@@ -55,14 +54,20 @@ func Read(r reader) {
 	channel_load_tmp := make(map[string]int)
 
 	for {
+		select {
+			case new_channel := <-r.channel_chan:
+				go joinChannel(r, new_channel)
+			default:
+		}
+
 		line, err := tp.ReadLine()
 		if err != nil {
 			channels := make([]string, 0, len(r.channels))
 			for c, _ := range r.channels {
 				channels = append(channels, c)
 			}
-			log.Fatal("[ ", r.id, " ]", " Error Reading! Reconnecting...")
-			new_r := NewReader(channels, r.id, r.status_chan)
+			log.Println("[ ", r.id, " ]", " Error Reading! Reconnecting...")
+			new_r := NewReader(channels, r.id, r.status_chan, r.channel_chan)
 			Read(new_r)
 		}
 
@@ -86,26 +91,27 @@ func Read(r reader) {
 				r.channels[channel] = channel_load_tmp[channel]
 				channel_load_tmp[channel] = 0
 			}
-			r.status_chan <- StatusMsg {r.id, GetLoad(r), r.channels, nil}
+			r.status_chan <- StatusMsg {r, nil}
 
 			if GetLoad(r) > 150 {
-				for _, channel := range downscale(r) {
+				for channel, _ := range downscale(r) {
 					fmt.Fprintf(r.conn, "PART " + channel + "\n")
+					delete(r.channels, channel)
 				}
 			}
 		}
 	}
 }
 
-func downscale(r reader) []string {
-	var removed_channels []string
+func downscale(r reader) map[string]int {
+	removed_channels :=  make(map[string]int)
 	tmp := GetLoad(r)
 
 	for channel, _ := range r.channels {
 		tmp = tmp - r.channels[channel]
-		removed_channels = append(removed_channels, channel)
+		removed_channels[channel] = r.channels[channel]
 		if tmp < 200 {
-			r.status_chan <- StatusMsg {r.id, GetLoad(r), r.channels, removed_channels}
+			r.status_chan <- StatusMsg {r, removed_channels}
 			return removed_channels
 		}
 	}
@@ -118,4 +124,11 @@ func GetLoad(r reader) int {
 		load = load + i
 	}
 	return load/5
+}
+
+func joinChannel(r reader, channel string) {
+	log.Println(r.id, "Joining...", channel)
+	fmt.Fprintf(r.conn, "JOIN " + channel + "\n")
+	r.channels[channel] = 0
+	log.Println(r.id, "Joined", channel)
 }

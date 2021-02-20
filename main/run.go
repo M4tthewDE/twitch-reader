@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	channels := getChannels(1)
+	channels := getChannels(2)
 	status_chan := make(chan StatusMsg)
 
 	lb := NewLoadBalancer(channels, status_chan)
@@ -21,7 +21,7 @@ func getChannels(n int) ([]string){
 	var cursor []byte
 	for i := 0; i < n; i++ {
 		client := &http.Client{}
-		req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/streams?first=60&after=" + string(cursor), nil)
+		req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/streams?first=100&after=" + string(cursor), nil)
 		req.Header.Add("Client-Id", os.Getenv("TWITCH_ID"))
 		req.Header.Add("Authorization", "Bearer " + os.Getenv("TWITCH_TOKEN"))
 		resp, _ := client.Do(req)

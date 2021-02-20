@@ -5,7 +5,7 @@ import (
 	"os"
 	"io/ioutil"
 	"github.com/buger/jsonparser"
-	"log"
+	//"log"
 )
 
 type ChannelProvider struct {
@@ -13,7 +13,6 @@ type ChannelProvider struct {
 }
 
 func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
-	log.Println("start GetChannels")
 	var channels []string
 	var cursor []byte
 
