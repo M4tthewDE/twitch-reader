@@ -20,7 +20,7 @@ jobs:
         go-version: 1.15
 
     - name: Build
-      run: go get && go build -v ./main
+      run: ls && go get && go build -v
 
     - name: Test
-      run: go get && go test -v ./main
+      run: ls && go get && go test -v
