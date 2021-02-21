@@ -63,7 +63,7 @@ func Read(r reader) {
 		line, err := tp.ReadLine()
 		if err != nil {
 			channels := make([]string, 0, len(r.channels))
-			for c, _ := range r.channels {
+			for c := range r.channels {
 				channels = append(channels, c)
 			}
 			log.Println("[ ", r.id, " ]", " Error Reading! Reconnecting...")
@@ -87,14 +87,14 @@ func Read(r reader) {
 			startTime = time.Now()
 			n = 0
 
-			for channel, _ := range r.channels {
+			for channel := range r.channels {
 				r.channels[channel] = channel_load_tmp[channel]
 				channel_load_tmp[channel] = 0
 			}
 			r.status_chan <- StatusMsg {r, nil}
 
 			if GetLoad(r) > 100 {
-				for channel, _ := range downscale(r) {
+				for channel := range downscale(r) {
 					fmt.Fprintf(r.conn, "PART " + channel + "\n")
 					delete(r.channels, channel)
 				}
@@ -107,7 +107,7 @@ func downscale(r reader) map[string]int {
 	removed_channels :=  make(map[string]int)
 	tmp := GetLoad(r)
 
-	for channel, _ := range r.channels {
+	for channel := range r.channels {
 		tmp = tmp - r.channels[channel]
 		removed_channels[channel] = r.channels[channel]
 		if tmp < 200 {

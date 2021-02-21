@@ -8,5 +8,5 @@ func main() {
 
 	lb := NewLoadBalancer(status_chan)
 	Run(lb)
-	for{}
+	for{select{}}
 }

@@ -39,19 +39,8 @@ func Run(lb loadBalancer) {
 				}
 			case new_channels := <-lb.channel_provider.channel_chan:
 				distributeNewChannels(new_channels, lb)
-			default:
 		}
 	}
-}
-
-func isChannelRead(channel string, lb loadBalancer) bool {
-	for _, reader := range lb.readers {
-		_, exists := reader.channels[channel]
-		if exists {
-			return true
-		}
-	}
-	return false
 }
 
 func distributeNewChannels(channels []string, lb loadBalancer) {

@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"github.com/buger/jsonparser"
 	"time"
+	"log"
 )
 
 type ChannelProvider struct {
@@ -26,20 +27,24 @@ func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
 			req.Header.Add("Authorization", "Bearer " + os.Getenv("TWITCH_TOKEN"))
 			resp, _ := client.Do(req)
 
-			defer resp.Body.Close()
-			data, _ := ioutil.ReadAll(resp.Body)
+			if resp.StatusCode == 200 {
+				data, _ := ioutil.ReadAll(resp.Body)
 
-			jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
-				tmp, _, _, _ := jsonparser.Get(value, "user_login")
-				channels = append(channels, "#" + string(tmp))
-			}, "data")
+				_, err := jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
+					tmp, _, _, _ := jsonparser.Get(value, "user_login")
+					channels = append(channels, "#" + string(tmp))
+				}, "data")
 
-			cursor, _, _, _ = jsonparser.Get(data, "pagination", "cursor")
-			channel_provider.channel_chan <- channels
-			channels = nil
-			time.Sleep(10*time.Second)
+				if err != nil {
+					log.Fatal(err)
+				}
+
+				cursor, _, _, _ = jsonparser.Get(data, "pagination", "cursor")
+				channel_provider.channel_chan <- channels
+				channels = nil
+				time.Sleep(10*time.Second)
+			}
 		}
 		cursor = cursor[:0]
-		i = 0
 	}
 }
