@@ -5,7 +5,7 @@ import (
 	"os"
 	"io/ioutil"
 	"github.com/buger/jsonparser"
-	//"log"
+	"time"
 )
 
 type ChannelProvider struct {
@@ -13,14 +13,15 @@ type ChannelProvider struct {
 }
 
 func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
+	time.Sleep(1*time.Minute)
 	var channels []string
 	var cursor []byte
 
 	var i int
 	for {
-		for i = 0; i < n; i++ {
+		for i = 1; i < n; i++ {
 			client := &http.Client{}
-			req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/streams?first=60&after=" + string(cursor), nil)
+			req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/streams?first=100&after=" + string(cursor), nil)
 			req.Header.Add("Client-Id", os.Getenv("TWITCH_ID"))
 			req.Header.Add("Authorization", "Bearer " + os.Getenv("TWITCH_TOKEN"))
 			resp, _ := client.Do(req)
@@ -36,6 +37,7 @@ func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
 			cursor, _, _, _ = jsonparser.Get(data, "pagination", "cursor")
 			channel_provider.channel_chan <- channels
 			channels = nil
+			time.Sleep(30*time.Second)
 		}
 		i = 0
 	}

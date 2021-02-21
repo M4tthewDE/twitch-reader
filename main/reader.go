@@ -41,7 +41,7 @@ func NewReader(twitch_channels []string, id int, status_chan chan StatusMsg, cha
 
 		channels[channel] = 0
 	}
-	load := []int{0,0,0,0,0}
+	load := []int{0,0,0,0}
 	r := reader {id, channels, load, conn, status_chan, channel_chan}
 	return r
 }
@@ -56,7 +56,7 @@ func Read(r reader) {
 	for {
 		select {
 			case new_channel := <-r.channel_chan:
-				go joinChannel(r, new_channel)
+				joinChannel(r, new_channel)
 			default:
 		}
 
@@ -93,7 +93,7 @@ func Read(r reader) {
 			}
 			r.status_chan <- StatusMsg {r, nil}
 
-			if GetLoad(r) > 150 {
+			if GetLoad(r) > 100 {
 				for channel, _ := range downscale(r) {
 					fmt.Fprintf(r.conn, "PART " + channel + "\n")
 					delete(r.channels, channel)
@@ -123,12 +123,10 @@ func GetLoad(r reader) int {
 	for _, i := range r.load {
 		load = load + i
 	}
-	return load/5
+	return load/4
 }
 
 func joinChannel(r reader, channel string) {
-	log.Println(r.id, "Joining...", channel)
 	fmt.Fprintf(r.conn, "JOIN " + channel + "\n")
 	r.channels[channel] = 0
-	log.Println(r.id, "Joined", channel)
 }

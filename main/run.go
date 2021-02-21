@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	channels := getChannels(2)
+	channels := getChannels(1)
 	status_chan := make(chan StatusMsg)
 
 	lb := NewLoadBalancer(channels, status_chan)
