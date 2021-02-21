@@ -13,13 +13,13 @@ type ChannelProvider struct {
 }
 
 func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
-	time.Sleep(1*time.Minute)
+	time.Sleep(5*time.Second)
 	var channels []string
 	var cursor []byte
 
 	var i int
 	for {
-		for i = 1; i < n; i++ {
+		for i = 0; i < n; i++ {
 			client := &http.Client{}
 			req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/streams?first=100&after=" + string(cursor), nil)
 			req.Header.Add("Client-Id", os.Getenv("TWITCH_ID"))
@@ -37,8 +37,9 @@ func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
 			cursor, _, _, _ = jsonparser.Get(data, "pagination", "cursor")
 			channel_provider.channel_chan <- channels
 			channels = nil
-			time.Sleep(30*time.Second)
+			time.Sleep(10*time.Second)
 		}
+		cursor = cursor[:0]
 		i = 0
 	}
 }

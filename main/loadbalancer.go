@@ -11,14 +11,9 @@ type loadBalancer struct {
 	channel_provider ChannelProvider
 }
 
-func NewLoadBalancer(channels []string, status_chan chan StatusMsg) (loadBalancer){
+func NewLoadBalancer(status_chan chan StatusMsg) (loadBalancer){
 	log.Println("new Loadbalancer")
-	split := 50
 	readers := make(map[int]reader)
-	for i := 0; i < len(channels); i = i + split {
-		channelBatch :=channels[i:i+split]
-		readers[i] = NewReader(channelBatch, i/split, status_chan, make(chan string, 100))
-	}
 	cp := ChannelProvider {make(chan []string, 1)}
 	lb := loadBalancer {readers, status_chan, cp}
 	return lb
@@ -29,9 +24,10 @@ func Run(lb loadBalancer) {
 		go Read(reader)
 	}
 
-	go GetChannels(lb.channel_provider, 100)
+	go GetChannels(lb.channel_provider, 10)
 
 	for {
+		//TODO automatic merging of low load runners
 		select {
 			case status_msg := <-lb.status_chan:
 				lb.readers[status_msg.r.id] = status_msg.r
@@ -59,9 +55,35 @@ func isChannelRead(channel string, lb loadBalancer) bool {
 }
 
 func distributeNewChannels(channels []string, lb loadBalancer) {
-	reader := NewReader(channels, len(lb.readers), lb.status_chan, make(chan string, 5))
-	lb.readers[len(lb.readers)] = reader
-	go Read(reader)
+	all_channels := getAllChannels(lb)
+	var channels_to_remove []string
+
+	for _, channel := range channels {
+		if find(all_channels, channel) {
+			channels_to_remove = append(channels_to_remove, channel)
+		}
+	}
+	for _, channel := range channels_to_remove {
+		channels = remove(channels, channel)
+	}
+
+	if len(channels) > 0 {
+		split := 10
+		for i := 0; i < len(channels); i = i + split {
+			channelBatch :=channels[i:i+split]
+			reader := NewReader(channelBatch, len(lb.readers), lb.status_chan, make(chan string, 5))
+			lb.readers[len(lb.readers)] = reader
+			go Read(reader)
+		}
+	}
+}
+
+func getAllChannels(lb loadBalancer) []string {
+	var channels []string
+	for _, reader := range lb.readers {
+		channels = append(channels, GetReaderChannels(reader)...)
+	}
+	return channels
 }
 
 func distributeChannel(channel string, lb loadBalancer) {
@@ -83,4 +105,30 @@ func getAvailableReader(lb loadBalancer) (reader *reader, err error) {
 		}
 	}
 	return nil, errors.New("No reader found")
+}
+
+func find(slice []string, val string) bool {
+    for _, item := range slice {
+        if item == val {
+            return true
+        }
+    }
+    return false
+}
+
+func remove(s []string, element string) []string {
+	i := indexOf(s, element)
+	s[len(s)-1], s[i] = s[i], s[len(s)-1]
+	return s[:len(s)-1]
+}
+
+func indexOf(strings []string, element string) int {
+	i := 0
+	for _, s := range strings {
+		if s == element {
+			return i
+		}
+		i++
+	}
+	return -1
 }

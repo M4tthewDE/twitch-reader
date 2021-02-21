@@ -130,3 +130,11 @@ func joinChannel(r reader, channel string) {
 	fmt.Fprintf(r.conn, "JOIN " + channel + "\n")
 	r.channels[channel] = 0
 }
+
+func GetReaderChannels(r reader) []string {
+	var channels []string
+	for c := range r.channels {
+		channels = append(channels, c)
+	}
+	return channels
+}
