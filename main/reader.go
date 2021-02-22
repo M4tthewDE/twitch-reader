@@ -1,26 +1,26 @@
 package main
 
 import (
-	"net"
-	"log"
-	"fmt"
-	"net/textproto"
 	"bufio"
-	"time"
+	"fmt"
+	"log"
+	"net"
+	"net/textproto"
 	"strings"
+	"time"
 )
 
 type StatusMsg struct {
-	r reader
+	r               reader
 	parted_channels map[string]int
 }
 
 type reader struct {
-	id int
-	channels map[string]int
-	load []int
-	conn net.Conn
-	status_chan chan StatusMsg
+	id           int
+	channels     map[string]int
+	load         []int
+	conn         net.Conn
+	status_chan  chan StatusMsg
 	channel_chan chan string
 }
 
@@ -31,18 +31,18 @@ func NewReader(twitch_channels []string, id int, status_chan chan StatusMsg, cha
 		NewReader(twitch_channels, id, status_chan, channel_chan)
 	}
 
-	fmt.Fprintf(conn, "PASS oauth: " + "\n")
-	fmt.Fprintf(conn, "NICk justinfan696" + "\n")
+	fmt.Fprintf(conn, "PASS oauth: "+"\n")
+	fmt.Fprintf(conn, "NICk justinfan696"+"\n")
 
 	channels := make(map[string]int)
 	for _, channel := range twitch_channels {
-		fmt.Fprintf(conn, "JOIN " + channel + "\n")
-		log.Println("[", id, "] " + "Joined " + channel)
+		fmt.Fprintf(conn, "JOIN "+channel+"\n")
 
 		channels[channel] = 0
 	}
-	load := []int{0,0,0,0}
-	r := reader {id, channels, load, conn, status_chan, channel_chan}
+	load := []int{30, 30, 30, 30}
+	r := reader{id, channels, load, conn, status_chan, channel_chan}
+	log.Println("New reader", id)
 	return r
 }
 
@@ -55,9 +55,13 @@ func Read(r reader) {
 
 	for {
 		select {
-			case new_channel := <-r.channel_chan:
-				joinChannel(r, new_channel)
-			default:
+		case new_channel, ok := <-r.channel_chan:
+			if !ok {
+				log.Println("stopping read", r.id)
+				return
+			}
+			joinChannel(r, new_channel)
+		default:
 		}
 
 		line, err := tp.ReadLine()
@@ -72,13 +76,15 @@ func Read(r reader) {
 		}
 
 		if strings.Contains(line, "PING") {
-			fmt.Fprintf(r.conn, "PONG :tmi.twitch.tv" + "\n")
+			fmt.Fprintf(r.conn, "PONG :tmi.twitch.tv"+"\n")
 		}
 
 		parts := strings.Split(line, " ")
-		if parts[1] == "PRIVMSG" {
-			channel_load_tmp[parts[2]]++
-			n++
+		if len(parts) > 1 {
+			if parts[1] == "PRIVMSG" {
+				channel_load_tmp[parts[2]]++
+				n++
+			}
 		}
 
 		if time.Since(startTime).Seconds() >= 1 {
@@ -91,11 +97,11 @@ func Read(r reader) {
 				r.channels[channel] = channel_load_tmp[channel]
 				channel_load_tmp[channel] = 0
 			}
-			r.status_chan <- StatusMsg {r, nil}
+			r.status_chan <- StatusMsg{r, nil}
 
 			if GetLoad(r) > 100 {
 				for channel := range downscale(r) {
-					fmt.Fprintf(r.conn, "PART " + channel + "\n")
+					fmt.Fprintf(r.conn, "PART "+channel+"\n")
 					delete(r.channels, channel)
 				}
 			}
@@ -104,14 +110,14 @@ func Read(r reader) {
 }
 
 func downscale(r reader) map[string]int {
-	removed_channels :=  make(map[string]int)
+	removed_channels := make(map[string]int)
 	tmp := GetLoad(r)
 
 	for channel := range r.channels {
 		tmp = tmp - r.channels[channel]
 		removed_channels[channel] = r.channels[channel]
 		if tmp < 200 {
-			r.status_chan <- StatusMsg {r, removed_channels}
+			r.status_chan <- StatusMsg{r, removed_channels}
 			return removed_channels
 		}
 	}
@@ -123,11 +129,11 @@ func GetLoad(r reader) int {
 	for _, i := range r.load {
 		load = load + i
 	}
-	return load/4
+	return load / 4
 }
 
 func joinChannel(r reader, channel string) {
-	fmt.Fprintf(r.conn, "JOIN " + channel + "\n")
+	fmt.Fprintf(r.conn, "JOIN "+channel+"\n")
 	r.channels[channel] = 0
 }
 
