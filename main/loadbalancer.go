@@ -6,66 +6,71 @@ import (
 )
 
 type loadBalancer struct {
-	readers          map[int]reader
-	status_chan      chan StatusMsg
-	channel_provider ChannelProvider
-	nextId           int
+	readers           map[int]*reader
+	channel_provider  ChannelProvider
+	nextId            int
+	reader_leave_chan chan StatusMsg
 }
 
-func NewLoadBalancer(status_chan chan StatusMsg) *loadBalancer {
-	log.Println("new Loadbalancer")
-	readers := make(map[int]reader)
+func NewLoadBalancer() *loadBalancer {
+	readers := make(map[int]*reader)
 	cp := ChannelProvider{make(chan []string, 1)}
-	lb := &loadBalancer{readers, status_chan, cp, 0}
+	lb := &loadBalancer{readers, cp, 0, make(chan StatusMsg, 10)}
 	return lb
 }
 
 func Run(lb *loadBalancer) {
-	for _, reader := range lb.readers {
-		go Read(reader)
-	}
-
-	go GetChannels(lb.channel_provider, 1)
-
 	var reader_to_merge *reader
+	go GetChannels(lb.channel_provider, 10)
+
 	for {
-		//TODO automatic merging of low load runners
-
 		select {
-		case status_msg := <-lb.status_chan:
-			reader := status_msg.r
-			lb.readers[reader.id] = reader
-			log.Println(reader.id, GetLoad(reader), len(reader.channels))
-			if len(status_msg.parted_channels) > 0 {
-				for channel := range status_msg.parted_channels {
-					distributeChannel(channel, lb)
-				}
-			}
-			if GetLoad(reader) < 30 {
-				if reader_to_merge != nil && reader_to_merge.id != reader.id {
-					// TODO fix racecondition 🚗
-					mergeReaders(reader, reader_to_merge, lb)
-					reader_to_merge = nil
-				} else {
-					reader_to_merge = &reader
-				}
-			}
-
 		case new_channels := <-lb.channel_provider.channel_chan:
 			distributeNewChannels(new_channels, lb)
+
+		case status_msg := <-lb.reader_leave_chan:
+			reader := lb.readers[status_msg.id]
+			if !reader.deactivated {
+				if len(status_msg.parted_channels) > 0 {
+					for channel := range status_msg.parted_channels {
+						distributeChannel(channel, lb)
+					}
+				}
+			}
+		default:
+			total_load := 0
+			total_channels := 0
+			total_readers := 0
+			for _, reader := range lb.readers {
+				total_load = total_load + GetLoad(reader)
+				total_channels = total_channels + len(reader.channels)
+
+				if !reader.deactivated {
+					total_readers++
+				}
+
+				if GetLoad(reader) < 30 && !reader.deactivated {
+					if reader_to_merge != nil && reader_to_merge.id != reader.id {
+						mergeReaders(reader, reader_to_merge, lb)
+						reader_to_merge = nil
+					} else {
+						reader_to_merge = reader
+					}
+				}
+			}
+			if len(lb.readers) > 0 {
+				log.Println("Average load:", total_load/total_readers, "readers:", total_readers, "total channels:", total_channels)
+			}
 		}
 	}
 }
 
-func mergeReaders(reader0 reader, reader1 *reader, lb *loadBalancer) {
-	log.Println("merging ", reader0.id, "->", reader1.id)
-
+func mergeReaders(reader0 *reader, reader1 *reader, lb *loadBalancer) {
+	// TODO fix concurrent map read/write
 	for channel := range reader0.channels {
-		reader1.channel_chan <- channel
+		reader1.join_chan <- channel
 	}
-	close(reader0.channel_chan)
-	delete(lb.readers, reader0.id)
-	log.Println(reader0.id, "deactivated")
+	reader0.deactivated = true
 }
 
 func distributeNewChannels(channels []string, lb *loadBalancer) {
@@ -82,10 +87,10 @@ func distributeNewChannels(channels []string, lb *loadBalancer) {
 	}
 
 	if len(channels) > 0 {
-		split := 10
+		split := 20
 		for i := 0; i < len(channels); i = i + split {
 			channelBatch := channels[i : i+split]
-			reader := NewReader(channelBatch, lb.nextId, lb.status_chan, make(chan string, 20))
+			reader := NewReader(channelBatch, lb.nextId, lb.reader_leave_chan)
 			lb.nextId++
 			lb.readers[len(lb.readers)] = reader
 			go Read(reader)
@@ -104,20 +109,19 @@ func getAllChannels(lb *loadBalancer) []string {
 func distributeChannel(channel string, lb *loadBalancer) {
 	r, err := getAvailableReader(lb)
 	if err != nil {
-		log.Println("we need more channels here")
-		reader := NewReader([]string{channel}, lb.nextId, lb.status_chan, make(chan string, 20))
+		reader := NewReader([]string{channel}, lb.nextId, lb.reader_leave_chan)
 		lb.nextId++
 		lb.readers[len(lb.readers)] = reader
 		go Read(reader)
 	} else {
-		r.channel_chan <- channel
+		r.join_chan <- channel
 	}
 }
 
 func getAvailableReader(lb *loadBalancer) (reader *reader, err error) {
 	for _, reader := range lb.readers {
 		if GetLoad(reader) < 70 {
-			return &reader, nil
+			return reader, nil
 		}
 	}
 	return nil, errors.New("No reader found")

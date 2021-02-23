@@ -3,9 +3,7 @@ package main
 import ()
 
 func main() {
-	status_chan := make(chan StatusMsg)
-
-	lb := NewLoadBalancer(status_chan)
+	lb := NewLoadBalancer()
 	Run(lb)
 	for {
 		select {}

@@ -3,32 +3,31 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net"
 	"net/textproto"
 	"strings"
 	"time"
 )
 
+type reader struct {
+	id          int
+	channels    map[string]int
+	load        []int
+	conn        net.Conn
+	join_chan   chan string
+	leave_chan  chan StatusMsg
+	deactivated bool
+}
+
 type StatusMsg struct {
-	r               reader
+	id              int
 	parted_channels map[string]int
 }
 
-type reader struct {
-	id           int
-	channels     map[string]int
-	load         []int
-	conn         net.Conn
-	status_chan  chan StatusMsg
-	channel_chan chan string
-}
-
-func NewReader(twitch_channels []string, id int, status_chan chan StatusMsg, channel_chan chan string) reader {
+func NewReader(twitch_channels []string, id int, leave_chan chan StatusMsg) *reader {
 	conn, err := net.Dial("tcp", "irc.chat.twitch.tv:6667")
 	if err != nil {
-		log.Println("[ ", id, " ]", " Error Connecting!", err)
-		NewReader(twitch_channels, id, status_chan, channel_chan)
+		NewReader(twitch_channels, id, leave_chan)
 	}
 
 	fmt.Fprintf(conn, "PASS oauth: "+"\n")
@@ -40,13 +39,12 @@ func NewReader(twitch_channels []string, id int, status_chan chan StatusMsg, cha
 
 		channels[channel] = 0
 	}
-	load := []int{30, 30, 30, 30}
-	r := reader{id, channels, load, conn, status_chan, channel_chan}
-	log.Println("New reader", id)
+	load := []int{50, 50, 50, 50}
+	r := &reader{id, channels, load, conn, make(chan string, 20), leave_chan, false}
 	return r
 }
 
-func Read(r reader) {
+func Read(r *reader) {
 	tp := textproto.NewReader(bufio.NewReader(r.conn))
 
 	startTime := time.Now()
@@ -54,13 +52,12 @@ func Read(r reader) {
 	channel_load_tmp := make(map[string]int)
 
 	for {
+		if r.deactivated {
+			return
+		}
 		select {
-		case new_channel, ok := <-r.channel_chan:
-			if !ok {
-				log.Println("stopping read", r.id)
-				return
-			}
-			joinChannel(r, new_channel)
+		case new_channel := <-r.join_chan:
+			joinChannel(*r, new_channel)
 		default:
 		}
 
@@ -70,8 +67,7 @@ func Read(r reader) {
 			for c := range r.channels {
 				channels = append(channels, c)
 			}
-			log.Println("[ ", r.id, " ]", " Error Reading! Reconnecting...")
-			new_r := NewReader(channels, r.id, r.status_chan, r.channel_chan)
+			new_r := NewReader(channels, r.id, r.leave_chan)
 			Read(new_r)
 		}
 
@@ -97,7 +93,6 @@ func Read(r reader) {
 				r.channels[channel] = channel_load_tmp[channel]
 				channel_load_tmp[channel] = 0
 			}
-			r.status_chan <- StatusMsg{r, nil}
 
 			if GetLoad(r) > 100 {
 				for channel := range downscale(r) {
@@ -109,7 +104,7 @@ func Read(r reader) {
 	}
 }
 
-func downscale(r reader) map[string]int {
+func downscale(r *reader) map[string]int {
 	removed_channels := make(map[string]int)
 	tmp := GetLoad(r)
 
@@ -117,14 +112,14 @@ func downscale(r reader) map[string]int {
 		tmp = tmp - r.channels[channel]
 		removed_channels[channel] = r.channels[channel]
 		if tmp < 200 {
-			r.status_chan <- StatusMsg{r, removed_channels}
+			r.leave_chan <- StatusMsg{r.id, removed_channels}
 			return removed_channels
 		}
 	}
 	return nil
 }
 
-func GetLoad(r reader) int {
+func GetLoad(r *reader) int {
 	load := 0
 	for _, i := range r.load {
 		load = load + i
@@ -137,7 +132,7 @@ func joinChannel(r reader, channel string) {
 	r.channels[channel] = 0
 }
 
-func GetReaderChannels(r reader) []string {
+func GetReaderChannels(r *reader) []string {
 	var channels []string
 	for c := range r.channels {
 		channels = append(channels, c)
