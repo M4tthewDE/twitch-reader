@@ -42,10 +42,10 @@ func Run(lb *loadBalancer) {
 			total_channels := 0
 			total_readers := 0
 			for _, reader := range lb.readers {
-				total_load = total_load + GetLoad(reader)
-				total_channels = total_channels + len(reader.channels)
 
 				if !reader.deactivated {
+					total_load = total_load + GetLoad(reader)
+					total_channels = total_channels + len(reader.channels)
 					total_readers++
 				}
 
