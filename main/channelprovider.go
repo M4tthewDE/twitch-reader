@@ -1,20 +1,20 @@
 package main
 
 import (
+	"github.com/buger/jsonparser"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
-	"io/ioutil"
-	"github.com/buger/jsonparser"
 	"time"
-	"log"
 )
 
 type ChannelProvider struct {
 	channel_chan chan []string
 }
 
-func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
-	time.Sleep(5*time.Second)
+func GetChannels(channel_provider ChannelProvider, n int) []string {
+	time.Sleep(5 * time.Second)
 	var channels []string
 	var cursor []byte
 
@@ -22,9 +22,9 @@ func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
 	for {
 		for i = 0; i < n; i++ {
 			client := &http.Client{}
-			req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/streams?first=100&after=" + string(cursor), nil)
+			req, _ := http.NewRequest("GET", "https://api.twitch.tv/helix/streams?first=100&after="+string(cursor), nil)
 			req.Header.Add("Client-Id", os.Getenv("TWITCH_ID"))
-			req.Header.Add("Authorization", "Bearer " + os.Getenv("TWITCH_TOKEN"))
+			req.Header.Add("Authorization", "Bearer "+os.Getenv("TWITCH_TOKEN"))
 			resp, _ := client.Do(req)
 
 			if resp.StatusCode == 200 {
@@ -32,7 +32,7 @@ func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
 
 				_, err := jsonparser.ArrayEach(data, func(value []byte, dataType jsonparser.ValueType, offset int, err error) {
 					tmp, _, _, _ := jsonparser.Get(value, "user_login")
-					channels = append(channels, "#" + string(tmp))
+					channels = append(channels, "#"+string(tmp))
 				}, "data")
 
 				if err != nil {
@@ -42,7 +42,7 @@ func GetChannels(channel_provider ChannelProvider, n int) ([]string) {
 				cursor, _, _, _ = jsonparser.Get(data, "pagination", "cursor")
 				channel_provider.channel_chan <- channels
 				channels = nil
-				time.Sleep(10*time.Second)
+				time.Sleep(5 * time.Second)
 			}
 		}
 		cursor = cursor[:0]

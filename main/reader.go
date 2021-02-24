@@ -14,7 +14,7 @@ type reader struct {
 	channels    map[string]int
 	load        []int
 	conn        net.Conn
-	join_chan   chan string
+	join_chan   chan map[string]int
 	leave_chan  chan StatusMsg
 	deactivated bool
 }
@@ -40,7 +40,7 @@ func NewReader(twitch_channels []string, id int, leave_chan chan StatusMsg) *rea
 		channels[channel] = 0
 	}
 	load := []int{50, 50, 50, 50}
-	r := &reader{id, channels, load, conn, make(chan string, 20), leave_chan, false}
+	r := &reader{id, channels, load, conn, make(chan map[string]int, 20), leave_chan, false}
 	return r
 }
 
@@ -57,7 +57,9 @@ func Read(r *reader) {
 		}
 		select {
 		case new_channel := <-r.join_chan:
-			joinChannel(*r, new_channel)
+			for channel := range new_channel {
+				joinChannel(*r, channel)
+			}
 		default:
 		}
 

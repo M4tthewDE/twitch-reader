@@ -21,7 +21,7 @@ func NewLoadBalancer() *loadBalancer {
 
 func Run(lb *loadBalancer) {
 	var reader_to_merge *reader
-	go GetChannels(lb.channel_provider, 10)
+	go GetChannels(lb.channel_provider, 100)
 
 	for {
 		select {
@@ -66,10 +66,7 @@ func Run(lb *loadBalancer) {
 }
 
 func mergeReaders(reader0 *reader, reader1 *reader, lb *loadBalancer) {
-	// TODO fix concurrent map read/write
-	for channel := range reader0.channels {
-		reader1.join_chan <- channel
-	}
+	reader1.join_chan <- reader0.channels
 	reader0.deactivated = true
 }
 
@@ -114,7 +111,9 @@ func distributeChannel(channel string, lb *loadBalancer) {
 		lb.readers[len(lb.readers)] = reader
 		go Read(reader)
 	} else {
-		r.join_chan <- channel
+		m := make(map[string]int)
+		m[channel] = 0
+		r.join_chan <- m
 	}
 }
 
