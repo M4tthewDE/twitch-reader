@@ -14,7 +14,7 @@ type ChannelProvider struct {
 }
 
 func GetChannels(channel_provider ChannelProvider, n int) []string {
-	time.Sleep(5 * time.Second)
+	time.Sleep(3 * time.Second)
 	var channels []string
 	var cursor []byte
 
@@ -42,7 +42,7 @@ func GetChannels(channel_provider ChannelProvider, n int) []string {
 				cursor, _, _, _ = jsonparser.Get(data, "pagination", "cursor")
 				channel_provider.channel_chan <- channels
 				channels = nil
-				time.Sleep(5 * time.Second)
+				time.Sleep(3 * time.Second)
 			}
 		}
 		cursor = cursor[:0]
