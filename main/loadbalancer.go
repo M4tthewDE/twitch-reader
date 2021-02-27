@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"log"
+	"time"
 )
 
 type loadBalancer struct {
@@ -22,6 +23,7 @@ func NewLoadBalancer() *loadBalancer {
 func Run(lb *loadBalancer) {
 	var reader_to_merge *reader
 	go GetChannels(lb.channel_provider, 100)
+	start := time.Now()
 
 	for {
 		select {
@@ -58,8 +60,9 @@ func Run(lb *loadBalancer) {
 					}
 				}
 			}
-			if len(lb.readers) > 0 {
+			if len(lb.readers) > 0 && time.Since(start).Seconds() >= 1 {
 				log.Println("Average load:", total_load/total_readers, "readers:", total_readers, "total channels:", total_channels)
+				start = time.Now()
 			}
 		}
 	}
