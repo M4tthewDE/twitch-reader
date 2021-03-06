@@ -25,7 +25,7 @@ func NewLoadBalancer() *loadBalancer {
 func Run(lb *loadBalancer) {
 	go StartParser(lb.msgparser)
 	var reader_to_merge *reader
-	go GetChannels(lb.channel_provider, 100)
+	go GetChannels(lb.channel_provider, 10)
 	start := time.Now()
 
 	for {
