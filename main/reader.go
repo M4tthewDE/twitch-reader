@@ -17,6 +17,7 @@ type reader struct {
 	join_chan   chan map[string]int
 	leave_chan  chan StatusMsg
 	deactivated bool
+	msg_chan    chan string
 }
 
 type StatusMsg struct {
@@ -24,10 +25,10 @@ type StatusMsg struct {
 	parted_channels map[string]int
 }
 
-func NewReader(twitch_channels []string, id int, leave_chan chan StatusMsg) *reader {
+func NewReader(twitch_channels []string, id int, leave_chan chan StatusMsg, msg_chan chan string) *reader {
 	conn, err := net.Dial("tcp", "irc.chat.twitch.tv:6667")
 	if err != nil {
-		NewReader(twitch_channels, id, leave_chan)
+		NewReader(twitch_channels, id, leave_chan, msg_chan)
 	}
 
 	fmt.Fprintf(conn, "PASS oauth: "+"\n")
@@ -40,7 +41,7 @@ func NewReader(twitch_channels []string, id int, leave_chan chan StatusMsg) *rea
 		channels[channel] = 0
 	}
 	load := []int{50, 50, 50, 50}
-	r := &reader{id, channels, load, conn, make(chan map[string]int, 20), leave_chan, false}
+	r := &reader{id, channels, load, conn, make(chan map[string]int, 20), leave_chan, false, msg_chan}
 	return r
 }
 
@@ -69,8 +70,12 @@ func Read(r *reader) {
 			for c := range r.channels {
 				channels = append(channels, c)
 			}
-			new_r := NewReader(channels, r.id, r.leave_chan)
+			new_r := NewReader(channels, r.id, r.leave_chan, r.msg_chan)
 			Read(new_r)
+		}
+		select {
+		case r.msg_chan <- line:
+		default:
 		}
 
 		if strings.Contains(line, "PING") {
