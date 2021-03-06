@@ -11,16 +11,19 @@ type loadBalancer struct {
 	channel_provider  ChannelProvider
 	nextId            int
 	reader_leave_chan chan StatusMsg
+	msgparser         MessageParser
 }
 
 func NewLoadBalancer() *loadBalancer {
 	readers := make(map[int]*reader)
 	cp := ChannelProvider{make(chan []string, 1)}
-	lb := &loadBalancer{readers, cp, 0, make(chan StatusMsg, 10)}
+	mp := MessageParser{make(chan string, 100)}
+	lb := &loadBalancer{readers, cp, 0, make(chan StatusMsg, 10), mp}
 	return lb
 }
 
 func Run(lb *loadBalancer) {
+	go StartParser(lb.msgparser)
 	var reader_to_merge *reader
 	go GetChannels(lb.channel_provider, 100)
 	start := time.Now()
@@ -90,7 +93,7 @@ func distributeNewChannels(channels []string, lb *loadBalancer) {
 		split := 20
 		for i := 0; i < len(channels); i = i + split {
 			channelBatch := channels[i : i+split]
-			reader := NewReader(channelBatch, lb.nextId, lb.reader_leave_chan)
+			reader := NewReader(channelBatch, lb.nextId, lb.reader_leave_chan, lb.msgparser.msg_chan)
 			lb.nextId++
 			lb.readers[len(lb.readers)] = reader
 			go Read(reader)
@@ -109,7 +112,7 @@ func getAllChannels(lb *loadBalancer) []string {
 func distributeChannel(channel string, lb *loadBalancer) {
 	r, err := getAvailableReader(lb)
 	if err != nil {
-		reader := NewReader([]string{channel}, lb.nextId, lb.reader_leave_chan)
+		reader := NewReader([]string{channel}, lb.nextId, lb.reader_leave_chan, lb.msgparser.msg_chan)
 		lb.nextId++
 		lb.readers[len(lb.readers)] = reader
 		go Read(reader)
